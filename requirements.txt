@@ -1,0 +1,14 @@
+streamlit
+langchain
+langchain-community
+langchain-groq
+langchain-huggingface
+langchain-text-splitters
+faiss-cpu
+sentence-transformers
+rank-bm25
+pypdf
+python-dotenv
+torch
+torchvision
+numpy
