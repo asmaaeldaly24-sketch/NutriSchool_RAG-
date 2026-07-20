@@ -12,11 +12,19 @@ from langchain_groq import ChatGroq
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder, SentenceTransformer
 
+
 INDEX_DIR = Path("rag_index")
 LOG_FILE = Path("logs/retrieval.jsonl")
-EMBED_MODEL = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-RERANK_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
-MIN_RERANK_SCORE = -1.5
+
+EMBED_MODEL = (
+    "sentence-transformers/"
+    "paraphrase-multilingual-mpnet-base-v2"
+)
+
+RERANK_MODEL = (
+    "cross-encoder/"
+    "mmarco-mMiniLMv2-L12-H384-v1"
+)
 
 
 def tokenize(text: str) -> list[str]:
@@ -28,21 +36,45 @@ def load_pipeline() -> dict:
     with open(INDEX_DIR / "chunks.pkl", "rb") as file:
         chunks = pickle.load(file)
 
+    index = faiss.read_index(
+        str(INDEX_DIR / "hnsw.faiss")
+    )
+
+    embedder = SentenceTransformer(
+        EMBED_MODEL
+    )
+
+    bm25 = BM25Okapi(
+        [
+            tokenize(doc.page_content)
+            for doc in chunks
+        ]
+    )
+
+    reranker = CrossEncoder(
+        RERANK_MODEL
+    )
+
+    llm = ChatGroq(
+        model="openai/gpt-oss-120b",
+        temperature=0.1,
+        max_tokens=900,
+    )
+
     return {
         "chunks": chunks,
-        "index": faiss.read_index(str(INDEX_DIR / "hnsw.faiss")),
-        "embedder": SentenceTransformer(EMBED_MODEL),
-        "bm25": BM25Okapi([tokenize(doc.page_content) for doc in chunks]),
-        "reranker": CrossEncoder(RERANK_MODEL),
-        "llm": ChatGroq(
-            model="openai/gpt-oss-120b",
-            temperature=0.1,
-            max_tokens=1200,
-        ),
+        "index": index,
+        "embedder": embedder,
+        "bm25": bm25,
+        "reranker": reranker,
+        "llm": llm,
     }
 
 
-def allowed(doc, filters: dict | None) -> bool:
+def allowed(
+    doc,
+    filters: dict | None,
+) -> bool:
     if not filters:
         return True
 
@@ -53,84 +85,144 @@ def allowed(doc, filters: dict | None) -> bool:
     )
 
 
-def rrf(*rankings: list[int], k: int = 60) -> list[int]:
+def rrf(
+    *rankings: list[int],
+    k: int = 60,
+) -> list[int]:
     scores: dict[int, float] = {}
 
     for ranking in rankings:
-        for rank, doc_id in enumerate(ranking, start=1):
-            scores[doc_id] = scores.get(doc_id, 0.0) + 1 / (k + rank)
+        for rank, doc_id in enumerate(
+            ranking,
+            start=1,
+        ):
+            scores[doc_id] = (
+                scores.get(doc_id, 0.0)
+                + 1 / (k + rank)
+            )
 
-    return sorted(scores, key=scores.get, reverse=True)
-
-
-def rewrite_query(question: str, profile: str = "") -> str:
-    prompt = f"""Rewrite the question as one precise English retrieval query.
-Keep pediatric nutrition, age, condition, allergy, food and nutrient terms.
-Do not answer the question.
-
-Question: {question}
-Child profile: {profile}
-"""
-    result = load_pipeline()["llm"].invoke(prompt)
-    return result.content.strip()
+    return sorted(
+        scores,
+        key=scores.get,
+        reverse=True,
+    )
 
 
 def retrieve(
     question: str,
     filters: dict | None = None,
-    top_k: int = 5,
+    top_k: int = 3,
     profile: str = "",
 ) -> tuple[list, list[float], str]:
     started = time.perf_counter()
     pipeline = load_pipeline()
-    query = rewrite_query(question, profile)
+
+    query = question.strip()
+
+    if profile.strip():
+        query = f"{question}\nChild profile: {profile}"
 
     vector = pipeline["embedder"].encode(
         [query],
         normalize_embeddings=True,
     ).astype("float32")
 
-    _, dense_ids = pipeline["index"].search(vector, 30)
+    _, dense_ids = pipeline["index"].search(
+        vector,
+        15,
+    )
 
-    bm25_scores = pipeline["bm25"].get_scores(tokenize(query))
-    bm25_ids = np.argsort(bm25_scores)[::-1][:30].tolist()
+    bm25_scores = pipeline["bm25"].get_scores(
+        tokenize(query)
+    )
 
-    candidate_ids = [
-        doc_id
-        for doc_id in rrf(dense_ids[0].tolist(), bm25_ids)
-        if allowed(pipeline["chunks"][doc_id], filters)
-    ][:20]
+    bm25_ids = np.argsort(
+        bm25_scores
+    )[::-1][:15].tolist()
+
+    fused_ids = rrf(
+        dense_ids[0].tolist(),
+        bm25_ids,
+    )
+
+    candidate_ids = []
+
+    for doc_id in fused_ids:
+        if doc_id < 0:
+            continue
+
+        doc = pipeline["chunks"][doc_id]
+
+        if allowed(doc, filters):
+            candidate_ids.append(doc_id)
+
+        if len(candidate_ids) >= 8:
+            break
 
     if not candidate_ids:
         return [], [], query
 
     pairs = [
-        (query, pipeline["chunks"][doc_id].page_content)
+        (
+            question,
+            pipeline["chunks"][doc_id].page_content,
+        )
         for doc_id in candidate_ids
     ]
-    rerank_scores = pipeline["reranker"].predict(pairs)
+
+    rerank_scores = pipeline[
+        "reranker"
+    ].predict(pairs)
 
     ranked = sorted(
-        zip(candidate_ids, rerank_scores),
+        zip(
+            candidate_ids,
+            rerank_scores,
+        ),
         key=lambda item: float(item[1]),
         reverse=True,
     )[:top_k]
 
-    docs = [pipeline["chunks"][doc_id] for doc_id, _ in ranked]
-    scores = [float(score) for _, score in ranked]
+    docs = [
+        pipeline["chunks"][doc_id]
+        for doc_id, _ in ranked
+    ]
 
-    LOG_FILE.parent.mkdir(exist_ok=True)
-    with open(LOG_FILE, "a", encoding="utf-8") as file:
+    scores = [
+        float(score)
+        for _, score in ranked
+    ]
+
+    LOG_FILE.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    with open(
+        LOG_FILE,
+        "a",
+        encoding="utf-8",
+    ) as file:
         file.write(
             json.dumps(
                 {
                     "question": question,
                     "query": query,
                     "filters": filters,
-                    "chunk_ids": [doc.metadata["chunk_id"] for doc in docs],
+                    "chunk_ids": [
+                        doc.metadata.get(
+                            "chunk_id",
+                            "unknown",
+                        )
+                        for doc in docs
+                    ],
                     "rerank_scores": scores,
                     "latency_ms": round(
-                        (time.perf_counter() - started) * 1000,
+                        (
+                            time.perf_counter()
+                            - started
+                        )
+                        * 1000,
                         2,
                     ),
                 },
@@ -147,37 +239,55 @@ def answer(
     profile: str = "",
     filters: dict | None = None,
 ) -> str:
-    docs, scores, _ = retrieve(
+    docs, _, _ = retrieve(
         question=question,
         filters=filters,
         profile=profile,
     )
 
-    if not docs or not scores or scores[0] < MIN_RERANK_SCORE:
+    if not docs:
+        is_arabic = any(
+            "\u0600" <= char <= "\u06FF"
+            for char in question
+        )
+
+        if is_arabic:
+            return (
+                "عذرًا، لم أجد معلومات كافية "
+                "في المراجع المتاحة للإجابة عن هذا السؤال."
+            )
+
         return (
-            "عذرًا، هذا السؤال خارج نطاق تغذية الأطفال والمراجع المتاحة."
-            if any("\u0600" <= char <= "\u06FF" for char in question)
-            else "Sorry, this question is outside the pediatric nutrition scope of the available references."
+            "Sorry, I could not find enough information "
+            "in the available references."
         )
 
     context = "\n\n".join(
-        f"[{index}] {doc.metadata['source']}, page {doc.metadata['page']}\n"
-        f"{doc.page_content}"
-        for index, doc in enumerate(docs, start=1)
+        doc.page_content
+        for doc in docs
     )
 
-    prompt = f"""You are a pediatric nutrition assistant.
+    prompt = f"""
+You are an evidence-based pediatric nutrition assistant.
 
 Rules:
-- Answer only questions about pediatric nutrition, child feeding, growth, food allergies, nutrients, school meals, or diet-related child health.
-- Use only the evidence below.
-- If the question is outside this scope, refuse briefly.
-- If the evidence is insufficient, say that clearly and do not guess.
-- Answer in the same language as the question.
-- Preserve numbers and units exactly.
-- Cite every factual paragraph using [1], [2], and so on.
-- End with a short Sources section.
-- Do not diagnose and do not replace a doctor.
+- Answer the user's question using only the retrieved evidence below.
+- Personalize the answer using the child's profile when relevant.
+- Focus on practical pediatric nutrition guidance.
+- Prefer affordable and commonly available Egyptian foods when suitable.
+- Respect allergies, intolerances, health conditions, and disliked foods.
+- If the evidence is insufficient, state that clearly and do not guess.
+- Answer in the same language as the user's question.
+- Keep the answer clear, practical, and concise.
+- Preserve numbers and measurement units exactly.
+- Use metric units such as grams, kilograms, milliliters, cups,
+  tablespoons, eggs, slices, and baladi bread.
+- Do not use imperial units.
+- Do not show source names, page numbers, file names,
+  citation numbers, or a Sources section.
+- Do not diagnose diseases.
+- Do not replace medical advice from a pediatrician
+  or registered dietitian.
 
 Child profile:
 {profile}
@@ -185,9 +295,12 @@ Child profile:
 Question:
 {question}
 
-Evidence:
+Retrieved evidence:
 {context}
 """
 
-    result = load_pipeline()["llm"].invoke(prompt)
+    result = load_pipeline()["llm"].invoke(
+        prompt
+    )
+
     return result.content.strip()
