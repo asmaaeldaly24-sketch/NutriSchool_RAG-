@@ -1,10 +1,12 @@
+import copy
+import html
+import logging
 import os
 import re
-from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
-from rag_pipeline import answer
+from rag_pipeline import NutritionAnswer, answer
 
 # =========================================================
 # PAGE SETTINGS
@@ -541,7 +543,7 @@ st.markdown(
         }
     }
 
-    @media (max-width: 768px) {
+    @media (max-width: 900px) {
         .block-container {
             padding-inline: 0.75rem !important;
         }
@@ -639,6 +641,287 @@ st.markdown(
         background: #EEF6EE !important;
     }
 
+
+    /* ---------- Readability and structured grounded answers ---------- */
+    p,
+    li,
+    .feature-copy {
+        font-size: clamp(16px, 1.05vw, 18px);
+    }
+
+    label[data-testid="stWidgetLabel"] p {
+        font-size: 16px !important;
+        line-height: 1.35 !important;
+    }
+
+    input,
+    textarea,
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] input,
+    div[data-baseweb="select"] div {
+        font-size: 17px !important;
+    }
+
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stNumberInput"] input {
+        min-height: 49px !important;
+        padding: 0.65rem 0.8rem !important;
+    }
+
+    div[data-testid="stNumberInput"] {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    div[data-testid="stNumberInput"] button {
+        min-width: 42px !important;
+        min-height: 47px !important;
+        flex: 0 0 42px !important;
+    }
+
+    div[data-testid="stSelectbox"],
+    div[data-testid="stSelectbox"] > div,
+    div[data-baseweb="select"] {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    div[data-baseweb="select"] > div {
+        overflow: visible !important;
+    }
+
+    div[data-baseweb="select"] span {
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+
+    div.stButton > button {
+        font-size: 17px !important;
+        line-height: 1.35 !important;
+    }
+
+    div[data-testid="stMetricLabel"] p {
+        font-size: 15px !important;
+    }
+
+    div[data-testid="stMetricValue"] {
+        font-size: 31px !important;
+    }
+
+    .answer-heading {
+        font-size: clamp(1.45rem, 2.1vw, 1.85rem);
+        line-height: 1.3;
+    }
+
+    .nutrition-answer {
+        width: 100%;
+        max-width: 100%;
+        color: var(--text);
+        font-size: 18px;
+        line-height: 1.9;
+        overflow: hidden;
+    }
+
+    .answer-card {
+        width: 100%;
+        padding: clamp(0.85rem, 1.6vw, 1.25rem);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: #FFFFFF;
+        box-shadow: 0 9px 24px rgba(16, 63, 53, 0.07);
+    }
+
+    .answer-title {
+        margin: 0 0 0.7rem;
+        color: var(--green-900);
+        font-family: "Playfair Display", serif;
+        font-size: clamp(1.3rem, 2vw, 1.7rem);
+        font-weight: 700;
+        line-height: 1.35;
+    }
+
+    .answer-summary {
+        margin: 0 0 0.85rem;
+        color: var(--text);
+        font-size: clamp(17px, 1.25vw, 19px);
+        line-height: 1.9;
+    }
+
+    .answer-table-wrap {
+        width: 100%;
+        max-width: 100%;
+        margin-top: 1rem;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        border: 1px solid #C9DDD0;
+        border-radius: 14px;
+        background: #FFFFFF;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .answer-table {
+        width: 100%;
+        min-width: 900px;
+        border-collapse: collapse;
+        table-layout: fixed;
+        direction: inherit;
+        text-align: inherit;
+    }
+
+    .answer-table th {
+        padding: 0.9rem 0.75rem;
+        color: #FFFFFF;
+        background: linear-gradient(90deg, #3F7F34, #2E6A50);
+        border-inline-end: 1px solid rgba(255, 255, 255, 0.22);
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1.5;
+        vertical-align: middle;
+    }
+
+    .answer-table td {
+        padding: 0.9rem 0.75rem;
+        color: var(--text);
+        background: #FFFFFF;
+        border-top: 1px solid #DDE9DF;
+        border-inline-end: 1px solid #E6EFE7;
+        font-size: 17px;
+        line-height: 1.75;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        white-space: normal;
+    }
+
+    .answer-table tbody tr:nth-child(even) td {
+        background: #F7FBF7;
+    }
+
+    .citation-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 27px;
+        height: 24px;
+        margin-inline-start: 0.2rem;
+        padding: 0 0.35rem;
+        border: 1px solid #BFD7C4;
+        border-radius: 999px;
+        color: var(--green-900);
+        background: #EEF6EE;
+        font-family: "DM Sans", sans-serif;
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1;
+        direction: ltr;
+        vertical-align: text-top;
+    }
+
+    .answer-closing,
+    .medical-notice {
+        margin-top: 1rem;
+        padding: 0.85rem 1rem;
+        border-radius: 12px;
+        font-size: 16px;
+        line-height: 1.75;
+    }
+
+    .answer-closing {
+        border-inline-start: 4px solid #6A9D49;
+        background: #F2F8F1;
+    }
+
+    .medical-notice {
+        color: #3B4F47;
+        border: 1px solid #D1E1D5;
+        background: #F8FBF8;
+    }
+
+    .reference-list {
+        margin: 0;
+        padding-inline-start: 1.25rem;
+    }
+
+    .reference-list li {
+        margin-bottom: 0.55rem;
+        font-size: 15px;
+        line-height: 1.6;
+    }
+
+    @media (max-width: 760px) {
+        .answer-card {
+            padding: 0.75rem;
+            border-radius: 13px;
+        }
+
+        .answer-table-wrap {
+            border: 0;
+            overflow: visible;
+            background: transparent;
+        }
+
+        .answer-table,
+        .answer-table tbody,
+        .answer-table tr,
+        .answer-table td {
+            display: block;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .answer-table thead {
+            display: none;
+        }
+
+        .answer-table tr {
+            margin-bottom: 0.85rem;
+            overflow: hidden;
+            border: 1px solid #C9DDD0;
+            border-radius: 13px;
+            background: #FFFFFF;
+        }
+
+        .answer-table td,
+        .answer-table tbody tr:nth-child(even) td {
+            display: grid;
+            grid-template-columns: minmax(105px, 35%) minmax(0, 65%);
+            gap: 0.65rem;
+            padding: 0.75rem;
+            border: 0;
+            border-bottom: 1px solid #E3ECE5;
+            background: #FFFFFF;
+            font-size: 16px;
+        }
+
+        .answer-table td:last-child {
+            border-bottom: 0;
+        }
+
+        .answer-table td::before {
+            content: attr(data-label);
+            color: var(--green-900);
+            font-size: 14px;
+            font-weight: 800;
+            line-height: 1.55;
+        }
+
+        div[data-testid="stNumberInput"] button {
+            min-width: 46px !important;
+        }
+    }
+
+    @media (max-width: 430px) {
+        .answer-table td {
+            grid-template-columns: 1fr;
+            gap: 0.3rem;
+        }
+
+        .answer-summary {
+            font-size: 16px;
+        }
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -658,20 +941,134 @@ if not os.getenv("GROQ_API_KEY"):
 # =========================================================
 # HELPER FUNCTIONS
 # =========================================================
+LOGGER = logging.getLogger("elite_school_app")
+
+SESSION_DEFAULTS = {
+    "profile_child_name": "",
+    "profile_age": 0,
+    "profile_gender": "Not selected",
+    "profile_school_class": "",
+    "profile_height_cm": 0,
+    "profile_weight_kg": 0,
+    "profile_health_conditions": [],
+    "profile_allergies": [],
+    "profile_activity_level": "Mostly sedentary",
+    "profile_disliked_foods": [],
+    "profile_other_disliked_foods": "",
+    "nutrition_question": "",
+    "nutrition_result": None,
+    "nutrition_last_profile": "",
+}
+
+
+GENDER_OPTIONS = ("Not selected", "Boy", "Girl")
+HEALTH_CONDITION_OPTIONS = (
+    "Type 1 Diabetes",
+    "Type 2 Diabetes",
+    "Insulin Resistance",
+    "Overweight / Obesity",
+    "Underweight",
+    "Iron-Deficiency Anemia",
+    "Constipation",
+)
+ALLERGY_OPTIONS = (
+    "Lactose Intolerance",
+    "Gluten Intolerance / Celiac Disease",
+    "Egg Allergy",
+    "Peanut Allergy",
+    "Tree Nut Allergy",
+    "Wheat Allergy",
+    "Fish Allergy",
+    "Shellfish Allergy",
+    "Soy Allergy",
+    "Sesame Allergy",
+    "Other Food Allergy",
+)
+ACTIVITY_OPTIONS = (
+    "Mostly sedentary",
+    "Moderately active",
+    "Very active",
+)
+DISLIKED_FOOD_OPTIONS = (
+    "Vegetables",
+    "Fruits",
+    "Eggs",
+    "Milk",
+    "Cheese",
+    "Yogurt",
+    "Fish",
+    "Chicken",
+    "Meat",
+    "Legumes",
+    "Nuts",
+)
+
+
+def _coerce_bounded_int(value: object, minimum: int, maximum: int) -> int:
+    try:
+        numeric_value = int(round(float(value)))
+    except (TypeError, ValueError):
+        numeric_value = minimum
+    return max(minimum, min(maximum, numeric_value))
+
+
+def initialize_session_state() -> None:
+    for key, default_value in SESSION_DEFAULTS.items():
+        if key not in st.session_state:
+            st.session_state[key] = copy.deepcopy(default_value)
+
+    # Normalize values from older app versions before the widgets are created.
+    st.session_state["profile_age"] = _coerce_bounded_int(
+        st.session_state.get("profile_age"),
+        0,
+        18,
+    )
+    st.session_state["profile_height_cm"] = _coerce_bounded_int(
+        st.session_state.get("profile_height_cm"),
+        0,
+        220,
+    )
+    st.session_state["profile_weight_kg"] = _coerce_bounded_int(
+        st.session_state.get("profile_weight_kg"),
+        0,
+        180,
+    )
+
+    if st.session_state.get("profile_gender") not in GENDER_OPTIONS:
+        st.session_state["profile_gender"] = "Not selected"
+
+    list_state_options = {
+        "profile_health_conditions": HEALTH_CONDITION_OPTIONS,
+        "profile_allergies": ALLERGY_OPTIONS,
+        "profile_disliked_foods": DISLIKED_FOOD_OPTIONS,
+    }
+    for list_key, allowed_options in list_state_options.items():
+        value = st.session_state.get(list_key)
+        if not isinstance(value, list):
+            st.session_state[list_key] = []
+        else:
+            st.session_state[list_key] = [
+                item for item in value if item in allowed_options
+            ]
+
+    if st.session_state.get("profile_activity_level") not in ACTIVITY_OPTIONS:
+        st.session_state["profile_activity_level"] = "Mostly sedentary"
+
+    for text_key in (
+        "profile_child_name",
+        "profile_school_class",
+        "profile_other_disliked_foods",
+        "nutrition_question",
+        "nutrition_last_profile",
+    ):
+        value = st.session_state.get(text_key)
+        st.session_state[text_key] = "" if value is None else str(value)
+
+
 def detect_language(text: str) -> str:
-    arabic_letters = len(
-        re.findall(r"[\u0600-\u06FF]", text)
-    )
-
-    english_letters = len(
-        re.findall(r"[A-Za-z]", text)
-    )
-
-    return (
-        "Arabic"
-        if arabic_letters >= english_letters
-        else "English"
-    )
+    arabic_letters = len(re.findall(r"[\u0600-\u06FF]", text or ""))
+    english_letters = len(re.findall(r"[A-Za-z]", text or ""))
+    return "Arabic" if arabic_letters >= english_letters else "English"
 
 
 def remove_none_values(values: list[str]) -> list[str]:
@@ -679,14 +1076,176 @@ def remove_none_values(values: list[str]) -> list[str]:
         "No known condition",
         "No known allergy or intolerance",
     }
-
-    cleaned_values = [
-        value
-        for value in values
-        if value not in ignored_values
-    ]
-
+    cleaned_values = [value for value in values if value not in ignored_values]
     return cleaned_values if cleaned_values else ["None"]
+
+
+def safe_html(value: object) -> str:
+    return html.escape(str(value or ""), quote=True).replace("\n", "<br>")
+
+
+def citation_badges(citations: tuple[int, ...]) -> str:
+    return "".join(
+        f'<span class="citation-chip">[{int(number)}]</span>'
+        for number in citations
+    )
+
+
+def render_nutrition_answer(result: NutritionAnswer) -> None:
+    language = result.language if result.language in {"ar", "en"} else "en"
+    direction = "rtl" if language == "ar" else "ltr"
+    text_align = "right" if language == "ar" else "left"
+
+    labels = (
+        {
+            "heading": "الإرشادات الغذائية الشخصية",
+            "recommendation": "التوصية",
+            "foods": "أطعمة مناسبة",
+            "quantity": "الكمية / التكرار",
+            "notes": "ملاحظات عملية",
+            "warnings": "تنبيهات",
+            "references": "المراجع المستخدمة",
+            "page": "صفحة",
+            "section": "قسم",
+        }
+        if language == "ar"
+        else {
+            "heading": "Personalized Nutrition Guidance",
+            "recommendation": "Recommendation",
+            "foods": "Suitable foods",
+            "quantity": "Quantity / frequency",
+            "notes": "Practical notes",
+            "warnings": "Warnings",
+            "references": "References used",
+            "page": "Page",
+            "section": "Section",
+        }
+    )
+
+    st.markdown(
+        f'<div class="answer-heading" dir="{direction}" style="text-align:{text_align}">'
+        f'{safe_html(labels["heading"])}'
+        '</div>'
+        '<div class="answer-divider"></div>',
+        unsafe_allow_html=True,
+    )
+
+    summary_html = "".join(
+        '<p class="answer-summary">'
+        f'{safe_html(item.text)} {citation_badges(item.citations)}'
+        '</p>'
+        for item in result.summary
+    )
+
+    rows_html = ""
+    if result.rows:
+        rendered_rows: list[str] = []
+        for row in result.rows:
+            citations = citation_badges(row.citations)
+            rendered_rows.append(
+                "<tr>"
+                f'<td data-label="{safe_html(labels["recommendation"])}">'
+                f'{safe_html(row.recommendation)} {citations}</td>'
+                f'<td data-label="{safe_html(labels["foods"])}">'
+                f'{safe_html(row.suitable_foods)}</td>'
+                f'<td data-label="{safe_html(labels["quantity"])}">'
+                f'{safe_html(row.quantity_frequency)}</td>'
+                f'<td data-label="{safe_html(labels["notes"])}">'
+                f'{safe_html(row.practical_notes)}</td>'
+                f'<td data-label="{safe_html(labels["warnings"])}">'
+                f'{safe_html(row.warnings)}</td>'
+                "</tr>"
+            )
+
+        rows_html = (
+            '<div class="answer-table-wrap">'
+            '<table class="answer-table">'
+            '<thead><tr>'
+            f'<th>{safe_html(labels["recommendation"])}</th>'
+            f'<th>{safe_html(labels["foods"])}</th>'
+            f'<th>{safe_html(labels["quantity"])}</th>'
+            f'<th>{safe_html(labels["notes"])}</th>'
+            f'<th>{safe_html(labels["warnings"])}</th>'
+            '</tr></thead>'
+            f'<tbody>{"".join(rendered_rows)}</tbody>'
+            '</table>'
+            '</div>'
+        )
+
+    closing_html = ""
+    if result.closing_note:
+        closing_html = (
+            '<div class="answer-closing">'
+            f'{safe_html(result.closing_note.text)} '
+            f'{citation_badges(result.closing_note.citations)}'
+            '</div>'
+        )
+
+    st.markdown(
+        f'<div class="nutrition-answer" dir="{direction}" style="text-align:{text_align}">'
+        '<div class="answer-card">'
+        f'<div class="answer-title">{safe_html(result.title)}</div>'
+        f'{summary_html}{rows_html}{closing_html}'
+        f'<div class="medical-notice">{safe_html(result.medical_notice)}</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    used_citations = {
+        citation
+        for item in result.summary
+        for citation in item.citations
+    }
+    used_citations.update(
+        citation
+        for row in result.rows
+        for citation in row.citations
+    )
+    if result.closing_note:
+        used_citations.update(result.closing_note.citations)
+
+    visible_references = [
+        reference
+        for reference in result.references
+        if reference.number in used_citations
+    ]
+    if visible_references:
+        with st.expander(labels["references"], expanded=False):
+            reference_items: list[str] = []
+            for reference in visible_references:
+                display_title = reference.title
+                if (
+                    language == "ar"
+                    and re.fullmatch(r"Reference\s+\d+", display_title)
+                ):
+                    display_title = f"مرجع {reference.number}"
+
+                details: list[str] = []
+                if reference.section:
+                    details.append(
+                        f'{labels["section"]}: {reference.section}'
+                    )
+                if reference.page:
+                    details.append(
+                        f'{labels["page"]}: {reference.page}'
+                    )
+                suffix = f' — {" | ".join(details)}' if details else ""
+                reference_items.append(
+                    f"<li><strong>[{reference.number}] "
+                    f"{safe_html(display_title)}</strong>"
+                    f"{safe_html(suffix)}</li>"
+                )
+            st.markdown(
+                '<ul class="reference-list">'
+                f'{"".join(reference_items)}'
+                '</ul>',
+                unsafe_allow_html=True,
+            )
+
+
+initialize_session_state()
+
 
 # =========================================================
 # HEADER
@@ -812,32 +1371,33 @@ with profile_col:
 
         child_name = st.text_input(
             "Child’s name",
-            value="",
             placeholder="Enter child’s name",
+            key="profile_child_name",
         )
 
-        age_col, gender_col = st.columns(2)
+        age_col, gender_col = st.columns([0.9, 1.1])
 
         with age_col:
             age = st.number_input(
                 "Age (years)",
                 min_value=0,
                 max_value=18,
-                value=0,
                 step=1,
+                key="profile_age",
+                help="Type the age or use +/−. Each step equals 1 year.",
             )
 
         with gender_col:
             gender = st.selectbox(
                 "Gender",
-                ["Not selected", "Boy", "Girl"],
-                index=0,
+                GENDER_OPTIONS,
+                key="profile_gender",
             )
 
         school_class = st.text_input(
             "School class",
-            value="",
             placeholder="Enter school class",
+            key="profile_school_class",
         )
 
         height_col, weight_col = st.columns(2)
@@ -845,19 +1405,21 @@ with profile_col:
         with height_col:
             height = st.number_input(
                 "Height (cm)",
-                min_value=0.0,
-                max_value=220.0,
-                value=0.0,
-                step=0.5,
+                min_value=0,
+                max_value=220,
+                step=1,
+                key="profile_height_cm",
+                help="Type centimeters or use +/−. Each step equals 1 cm.",
             )
 
         with weight_col:
             weight = st.number_input(
                 "Weight (kg)",
-                min_value=0.0,
-                max_value=180.0,
-                value=0.0,
-                step=0.5,
+                min_value=0,
+                max_value=180,
+                step=1,
+                key="profile_weight_kg",
+                help="Type kilograms or use +/−. Each step equals 1 kg.",
             )
 
         bmi = (
@@ -889,36 +1451,16 @@ with profile_col:
         ):
             health_conditions = st.multiselect(
                 "Health conditions",
-                [
-                    "Type 1 Diabetes",
-                    "Type 2 Diabetes",
-                    "Insulin Resistance",
-                    "Overweight / Obesity",
-                    "Underweight",
-                    "Iron-Deficiency Anemia",
-                    "Constipation",
-                ],
-                default=[],
+                HEALTH_CONDITION_OPTIONS,
                 placeholder="No health condition selected",
+                key="profile_health_conditions",
             )
 
             allergies = st.multiselect(
                 "Allergies and intolerances",
-                [
-                    "Lactose Intolerance",
-                    "Gluten Intolerance / Celiac Disease",
-                    "Egg Allergy",
-                    "Peanut Allergy",
-                    "Tree Nut Allergy",
-                    "Wheat Allergy",
-                    "Fish Allergy",
-                    "Shellfish Allergy",
-                    "Soy Allergy",
-                    "Sesame Allergy",
-                    "Other Food Allergy",
-                ],
-                default=[],
+                ALLERGY_OPTIONS,
                 placeholder="No allergy or intolerance selected",
+                key="profile_allergies",
             )
 
         with st.expander(
@@ -927,33 +1469,20 @@ with profile_col:
         ):
             activity_level = st.selectbox(
                 "Activity level",
-                [
-                    "Mostly sedentary",
-                    "Moderately active",
-                    "Very active",
-                ],
+                ACTIVITY_OPTIONS,
+                key="profile_activity_level",
             )
 
             disliked_foods = st.multiselect(
                 "Foods the child dislikes",
-                [
-                    "Vegetables",
-                    "Fruits",
-                    "Eggs",
-                    "Milk",
-                    "Cheese",
-                    "Yogurt",
-                    "Fish",
-                    "Chicken",
-                    "Meat",
-                    "Legumes",
-                    "Nuts",
-                ],
+                DISLIKED_FOOD_OPTIONS,
+                key="profile_disliked_foods",
             )
 
             other_disliked_foods = st.text_input(
                 "Other disliked foods",
                 placeholder="e.g., tomatoes or beans",
+                key="profile_other_disliked_foods",
             )
 
         st.info(
@@ -998,32 +1527,33 @@ with assistant_col:
             ),
             height=155,
             label_visibility="collapsed",
+            key="nutrition_question",
         )
 
         generate_answer = st.button(
             "Get Personalized Nutrition Advice",
             use_container_width=True,
+            key="generate_nutrition_answer",
         )
 
     if generate_answer:
         if not question.strip():
             st.warning("Please write your question first.")
-            st.stop()
+        else:
+            selected_health = remove_none_values(health_conditions)
+            selected_allergies = remove_none_values(allergies)
 
-        selected_health = remove_none_values(health_conditions)
-        selected_allergies = remove_none_values(allergies)
+            all_disliked_foods = list(disliked_foods)
+            if other_disliked_foods.strip():
+                all_disliked_foods.append(other_disliked_foods.strip())
 
-        all_disliked_foods = disliked_foods.copy()
-        if other_disliked_foods.strip():
-            all_disliked_foods.append(other_disliked_foods.strip())
-
-        profile = f"""
+            profile = f"""
 Name: {child_name.strip() or "Not provided"}
-Age: {age if age > 0 else "Not provided"}
+Age: {f"{int(age)} years" if age > 0 else "Not provided"}
 Gender: {gender if gender != "Not selected" else "Not provided"}
 School class: {school_class.strip() or "Not provided"}
-Height: {f"{height} cm" if height > 0 else "Not provided"}
-Weight: {f"{weight} kg" if weight > 0 else "Not provided"}
+Height: {f"{int(height)} cm" if height > 0 else "Not provided"}
+Weight: {f"{int(weight)} kg" if weight > 0 else "Not provided"}
 BMI: {f"{bmi:.1f}" if bmi > 0 else "Not available"}
 Activity level: {activity_level}
 Health conditions: {", ".join(selected_health)}
@@ -1031,41 +1561,27 @@ Allergies and intolerances: {", ".join(selected_allergies)}
 Disliked foods: {", ".join(all_disliked_foods) if all_disliked_foods else "None reported"}
 """.strip()
 
-        with st.spinner("Searching the nutrition references..."):
-            try:
-                response_text = answer(
-                    question=question.strip(),
-                    profile=profile,
-                    filters=None,
-                )
-
-                if not response_text:
-                    raise ValueError(
-                        "The RAG pipeline returned an empty response."
+            with st.spinner("Searching and validating the nutrition references..."):
+                try:
+                    response = answer(
+                        question=question.strip(),
+                        profile=profile,
+                        filters=None,
+                    )
+                    if not isinstance(response, NutritionAnswer):
+                        raise TypeError(
+                            "The RAG pipeline returned an unexpected result type."
+                        )
+                    st.session_state["nutrition_result"] = response
+                    st.session_state["nutrition_last_profile"] = profile
+                except Exception:
+                    LOGGER.exception("Nutrition answer generation failed.")
+                    st.error(
+                        "The assistant could not generate a validated answer. "
+                        "Please confirm that the RAG index and GROQ_API_KEY are available, "
+                        "then try again."
                     )
 
-            except Exception as error:
-                st.error(
-                    "The assistant could not generate an answer."
-                )
-                st.exception(error)
-                st.stop()
-
-        st.markdown(
-            '<div class="answer-heading">'
-            'Personalized Nutrition Guidance'
-            '</div>'
-            '<div class="answer-divider"></div>',
-            unsafe_allow_html=True,
-        )
-
-        answer_direction = (
-            "rtl" if detect_language(question) == "Arabic" else "ltr"
-        )
-
-        st.markdown(
-            f'<div class="nutrition-answer" dir="{answer_direction}">'
-            f'{response_text}'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+    stored_result = st.session_state.get("nutrition_result")
+    if isinstance(stored_result, NutritionAnswer):
+        render_nutrition_answer(stored_result)
