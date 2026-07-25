@@ -1,0 +1,107 @@
+{
+  "created_at_utc": "2026-07-23T11:16:14.115597+00:00",
+  "collection_name": "nutrischool_pediatric_nutrition",
+  "chroma_directory": "C:\\Users\\Admin\\Desktop\\NutriSchool_RAG\\chroma_db",
+  "embedding_model": "intfloat/multilingual-e5-base",
+  "embedding_dimension": 768,
+  "chunk_count": 4055,
+  "unique_hierarchy_paths": 97,
+  "books": {
+    "Pediatric-Nutrition": 2914,
+    "PNP 3rd Edition Book": 1141
+  },
+  "chunking_version": "canonical_page_recursive_v10",
+  "hierarchy_version": "canonical_school_v10",
+  "scope": "school-age and adolescent nutrition",
+  "audit": {
+    "chunk_count": 4055,
+    "book_counts": {
+      "Pediatric-Nutrition": 2914,
+      "PNP 3rd Edition Book": 1141
+    },
+    "unique_chapters": 97,
+    "suspicious_chunk_count": 0,
+    "top_chapters": [
+      [
+        "Chapter 49: Preventing Food Insecurity - Available Community Nutrition Programs",
+        225
+      ],
+      [
+        "Chapter 13: Fast Foods, Organic Foods, Fad Diets, and Herbs, Herbals, and Botanicals",
+        142
+      ],
+      [
+        "Chapter 21: Vitamins",
+        113
+      ],
+      [
+        "Chapter 33: Pediatric Obesity",
+        110
+      ],
+      [
+        "Chapter 24: Assessment of Nutritional Status",
+        109
+      ],
+      [
+        "Chapter 52: Food Safety: Pesticides, Industrial Chemicals, Toxins, Preservatives, Irradiation, and Food Biotechnology",
+        100
+      ],
+      [
+        "Chapter 12: Sports Nutrition",
+        97
+      ],
+      [
+        "Chapter 15: Protein",
+        83
+      ],
+      [
+        "Chapter 7: Feeding the Child",
+        80
+      ],
+      [
+        "Chapter 30: Nutrition Therapy for Children and Adolescents With Type 1 and Type 2 Diabetes Mellitus",
+        80
+      ],
+      [
+        "Chapter 35: Nutrition and Immunity",
+        77
+      ],
+      [
+        "Chapter 9: Nutrition in School, Preschool, and Child Care",
+        70
+      ],
+      [
+        "Chapter 20: Trace Elements",
+        70
+      ],
+      [
+        "Chapter 38: Eating Disorders in Children and Adolescents",
+        70
+      ],
+      [
+        "Chapter 17: Fats and Fatty Acids",
+        68
+      ],
+      [
+        "Chapter 51: Food Safety: Infectious Disease",
+        66
+      ],
+      [
+        "Chapter 42: Nutrition in the Management of Chronic Autoimmune Inflammatory Bowel Diseases in Children",
+        64
+      ],
+      [
+        "Chapter 44: Cardiac Disease",
+        61
+      ],
+      [
+        "Chapter 19: Iron",
+        60
+      ],
+      [
+        "Chapter 43: Liver Disease",
+        58
+      ]
+    ]
+  }
+}

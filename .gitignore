@@ -1,7 +1,6 @@
 .env
 __pycache__/
 *.pyc
-.venv/
-venv/
 .vscode/
-logs/
+chroma_db/
+rag_index/
