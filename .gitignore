@@ -4,3 +4,5 @@ __pycache__/
 .vscode/
 chroma_db/
 rag_index/
+.env.*
+!.env.example
