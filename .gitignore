@@ -5,3 +5,5 @@ __pycache__/
 rag_index/
 .env.*
 !.env.example
+
+*.zip
