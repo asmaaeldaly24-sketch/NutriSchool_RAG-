@@ -2,7 +2,6 @@
 __pycache__/
 *.pyc
 .vscode/
-chroma_db/
 rag_index/
 .env.*
 !.env.example
